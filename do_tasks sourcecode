@@ -1,0 +1,327 @@
+/* =========================================================
+   TO-DO MANAGER
+   -----------------------------------------------------------
+   A simple To-Do List Management System.
+
+   Required operations: Insert, Delete, Update, Display, Exit.
+   No functionality beyond that - the design goal here is a
+   minimal, well-spaced terminal layout (no boxes, no color,
+   no special symbols), so the interface stays clean without
+   adding visual complexity to the code.
+
+   Language: Standard C (C99). No external libraries, no
+   system()/OS-specific calls, no dynamic memory allocation.
+   ========================================================= */
+
+#include <stdio.h>
+
+#include <string.h>
+
+#define MAX_TASKS 50
+#define DESC_LEN 100
+#define DISPLAY_DESC_LEN 60 /* max description length shown in the table */
+
+/* ---------------------------------------------------------
+   Task struct: represents a single to-do item.
+   - id:          unique identifier, assigned automatically
+   - description: the task text itself
+   --------------------------------------------------------- */
+typedef struct {
+  int id;
+  char description[DESC_LEN];
+}
+Task;
+
+/* ---------------------- Function prototypes ---------------------- */
+
+/* Input helpers */
+void clearInputBuffer(void);
+int readIntChoice(void);
+void readLine(char * buffer, int size);
+
+/* Small layout helper (the only purely visual helper in the file) */
+void printDivider(int width);
+void printEmptyState(void);
+
+/* Screens */
+void printMainMenu(void);
+void printExitScreen(void);
+
+/* Core to-do operations */
+void insertTask(Task tasks[], int * count, int * nextId);
+void deleteTask(Task tasks[], int * count);
+void updateTask(Task tasks[], int count);
+void displayTasks(Task tasks[], int count);
+
+/* Utility */
+int findTaskIndexById(Task tasks[], int count, int id);
+
+/* ======================================================
+   main(): controls the menu loop only. It reads the user's
+   choice and dispatches to the matching function - all the
+   real logic for each operation lives in its own function.
+   ====================================================== */
+int main(void) {
+  Task tasks[MAX_TASKS];
+  int count = 0; /* how many tasks currently exist         */
+  int nextId = 1; /* ever-increasing counter for unique IDs */
+  int choice;
+
+  do {
+    printMainMenu();
+    choice = readIntChoice();
+
+    switch (choice) {
+    case 1:
+      insertTask(tasks, & count, & nextId);
+      break;
+    case 2:
+      deleteTask(tasks, & count);
+      break;
+    case 3:
+      updateTask(tasks, count);
+      break;
+    case 4:
+      displayTasks(tasks, count);
+      break;
+    case 5:
+      printExitScreen();
+      break;
+    default:
+      printf("\n        Invalid choice. Please enter a number from 1 to 5.\n");
+    }
+  } while (choice != 5);
+
+  return 0;
+}
+
+/* ==================== Input helpers ==================== */
+
+/* scanf("%d", ...) leaves the trailing newline character in the
+   input buffer. If we don't remove it, the next fgets() call
+   would read that leftover '\n' instead of real input. This
+   drains everything up to and including the next '\n'. */
+void clearInputBuffer(void) {
+  int c;
+  while ((c = getchar()) != '\n' && c != EOF) {}
+}
+
+/* Reads an integer choice safely. If the user types something
+   that isn't a number, scanf fails, we clear the buffer, and
+   return -1 (which the menu's switch treats as invalid) instead
+   of crashing or looping forever. */
+int readIntChoice(void) {
+  int value;
+  if (scanf("%d", & value) != 1) {
+    clearInputBuffer();
+    return -1;
+  }
+  clearInputBuffer();
+  return value;
+}
+
+/* Reads one line of text into buffer safely.
+   - If the line fits, the trailing '\n' is stripped, same as before.
+   - If the line is LONGER than the buffer, fgets() only captures the
+     first (size - 1) characters and leaves the rest of that line -
+     including its newline - still waiting in stdin. If left there,
+     the next read (e.g. the next menu choice) would accidentally
+     consume that leftover text instead of new input. This function
+     detects that case and discards the remainder of the line so the
+     next read always starts clean. */
+void readLine(char * buffer, int size) {
+  if (fgets(buffer, size, stdin) == NULL) {
+    buffer[0] = '\0';
+    return;
+  }
+
+  int len = (int) strlen(buffer);
+  if (len > 0 && buffer[len - 1] == '\n') {
+    buffer[len - 1] = '\0';
+  } else if (len == size - 1) {
+    clearInputBuffer(); /* line was longer than the buffer */
+  }
+}
+
+/* ==================== Layout helper ====================
+   The only purely decorative helper in the program: a plain
+   dashed line, indented to match the rest of the layout. */
+void printDivider(int width) {
+  printf("        ");
+  for (int i = 0; i < width; i++) putchar('-');
+  printf("\n");
+}
+
+/* Shared by Delete, Update, and Display - all three need to
+   show the same "nothing here yet" message when the list is
+   empty, so it lives in one place instead of three. */
+void printEmptyState(void) {
+  printf("\n\n        Your Tasks\n\n");
+  printDivider(28);
+  printf("\n        No tasks yet.\n");
+  printf("        Add your first task to get started.\n\n");
+  printDivider(28);
+  printf("\n");
+}
+
+/* ==================== Screens ==================== */
+
+void printMainMenu(void) {
+  printf("\n\n");
+  printf("        To-Do Manager\n\n");
+  printf("        Simple tasks. Clear mind.\n\n");
+  printDivider(28);
+  printf("\n");
+  printf("        1   Add a task\n");
+  printf("        2   Delete a task\n");
+  printf("        3   Update a task\n");
+  printf("        4   View all tasks\n");
+  printf("        5   Exit\n\n");
+  printDivider(28);
+  printf("\n        >  ");
+}
+
+void printExitScreen(void) {
+  printf("\n\n");
+  printf("        To-Do Manager\n\n");
+  printf("        Thanks for using the app.\n");
+  printf("        See you soon.\n\n");
+}
+
+/* ==================== Core to-do operations ==================== */
+
+void insertTask(Task tasks[], int * count, int * nextId) {
+  if ( * count >= MAX_TASKS) {
+    printf("\n        The task list is full. Delete a task before adding a new one.\n");
+    return;
+  }
+
+  printf("\n\n        Add a Task\n\n");
+  printf("        Enter task description:\n        > ");
+
+  char description[DESC_LEN];
+  readLine(description, DESC_LEN);
+
+  if (strlen(description) == 0) {
+    printf("\n        Task description cannot be empty.\n");
+    return;
+  }
+
+  tasks[ * count].id = * nextId;
+  strcpy(tasks[ * count].description, description);
+  ( * count) ++;
+
+  printf("\n        Task added successfully.\n");
+  printf("        Task ID: %02d\n", * nextId);
+
+  ( * nextId) ++; /* nextId only ever increases - see README for why */
+}
+
+void deleteTask(Task tasks[], int * count) {
+  if ( * count == 0) {
+    printEmptyState();
+    return;
+  }
+
+  printf("\n\n        Delete a Task\n\n");
+  printf("        Enter Task ID:\n        > ");
+  int id = readIntChoice();
+
+  int index = findTaskIndexById(tasks, * count, id);
+  if (index == -1) {
+    printf("\n        Task %02d does not exist.\n", id);
+    printf("        Please enter a valid Task ID.\n");
+    return;
+  }
+
+  printf("\n        Task found:\n");
+  printf("        \"%s\"\n\n", tasks[index].description);
+  printf("        Delete this task? [Y/N]\n        > ");
+
+  char response[10];
+  readLine(response, sizeof(response));
+
+  if (response[0] != 'y' && response[0] != 'Y') {
+    printf("\n        Deletion cancelled.\n");
+    return;
+  }
+
+  /* Shift every later element one slot left to close the gap
+     left by the deleted task - keeps the array contiguous. */
+  for (int i = index; i < * count - 1; i++) {
+    tasks[i] = tasks[i + 1];
+  }
+  ( * count) --;
+
+  printf("\n        Task %02d deleted successfully.\n", id);
+}
+
+void updateTask(Task tasks[], int count) {
+  if (count == 0) {
+    printEmptyState();
+    return;
+  }
+
+  printf("\n\n        Update a Task\n\n");
+  printf("        Enter Task ID:\n        > ");
+  int id = readIntChoice();
+
+  int index = findTaskIndexById(tasks, count, id);
+  if (index == -1) {
+    printf("\n        Task %02d does not exist.\n", id);
+    printf("        Please enter a valid Task ID.\n");
+    return;
+  }
+
+  printf("\n        Current task:\n        %s\n\n", tasks[index].description);
+  printf("        Enter new description:\n        > ");
+
+  char newDesc[DESC_LEN];
+  readLine(newDesc, DESC_LEN);
+
+  if (strlen(newDesc) == 0) {
+    printf("\n        Task description cannot be empty.\n");
+    return;
+  }
+
+  strcpy(tasks[index].description, newDesc);
+
+  printf("\n        Task %02d updated successfully.\n", id);
+}
+
+void displayTasks(Task tasks[], int count) {
+  if (count == 0) {
+    printEmptyState();
+    return;
+  }
+
+  printf("\n\n        Your Tasks\n\n");
+  printf("        ID    Task\n");
+  printDivider(34);
+
+  for (int i = 0; i < count; i++) {
+    /* Long descriptions are truncated with "..." so a single
+       task can never push the table wider than intended. */
+    char shown[DISPLAY_DESC_LEN + 4];
+    if (strlen(tasks[i].description) > DISPLAY_DESC_LEN) {
+      strncpy(shown, tasks[i].description, DISPLAY_DESC_LEN - 3);
+      shown[DISPLAY_DESC_LEN - 3] = '\0';
+      strcat(shown, "...");
+    } else {
+      strcpy(shown, tasks[i].description);
+    }
+    printf("        %02d    %s\n", tasks[i].id, shown);
+  }
+
+  printDivider(34);
+  printf("\n        %d task%s\n", count, count == 1 ? "" : "s");
+}
+
+/* ==================== Utility ==================== */
+
+int findTaskIndexById(Task tasks[], int count, int id) {
+  for (int i = 0; i < count; i++) {
+    if (tasks[i].id == id) return i;
+  }
+  return -1;
+}
