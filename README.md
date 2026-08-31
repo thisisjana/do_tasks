@@ -31,25 +31,13 @@ Every screen shares the same layout language: a consistent left margin, a single
 
 - C (C99)
 - Standard library only: `stdio.h`, `string.h`
-- No external libraries, no dynamic memory allocation, no files/databases, no ANSI color codes
+
 
 ## Requirements
 
-Any standard C compiler, e.g. GCC. Tested with `gcc` on Linux; works the same way on macOS and Windows (via MinGW/GCC) since nothing platform-specific is used.
+Any standard C compiler
 
-## How to Compile
 
-```bash
-gcc source_code.c -o todo
-```
-
-## How to Run
-
-```bash
-./todo
-```
-
-On Windows (MinGW/GCC), the same compile command produces `todo.exe`; run it with `todo` or `.\todo.exe` from the terminal.
 
 ## Menu
 
